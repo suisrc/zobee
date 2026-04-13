@@ -14,9 +14,12 @@ import (
 	"syscall"
 
 	"github.com/cilium/ebpf/link"
-	"github.com/suisrc/zgg/z"
 	"github.com/suisrc/zoo"
 	"github.com/suisrc/zoo/zoc"
+)
+
+const (
+	pcapSnapLen = 65535
 )
 
 //go:embed ebpf_capture.o
@@ -38,7 +41,7 @@ var (
 
 func Load(hook Hook) {
 
-	flag.BoolVar(&G.Config.Disabled, "e3disabled", false, "是否禁用 ebpfgo")
+	flag.BoolVar(&G.Config.Disabled, "e3disabled", true, "是否禁用 zobee")
 	flag.StringVar(&G.Config.IfName, "e3ifname", "", "抓包网卡名称")
 	flag.StringVar(&G.Config.PcapRules, "e3pcap", "", "pcap 过滤表达式")
 	flag.StringVar(&G.Config.Direction, "e3direction", "", "流量方向: ingress|egress")
@@ -54,18 +57,18 @@ func Load(hook Hook) {
 
 	zoo.Register("14-zobee", &G, func(svc zoo.SvcKit) zoo.Closed {
 		if G.Config.Disabled {
-			z.Logn("[_zoobee_]: disabled")
+			zoc.Logn("[_zoobee_]: disabled")
 			return nil
 		}
 		cfg := normalizeInitConfig(G.Config)
 		if _, err := normalizeConfig(cfg); err != nil {
-			svc.Engine().ServeStop("register ebpfgo error by config,", err.Error())
+			svc.Engine().ServeStop("register zobee error by config,", err.Error())
 			return nil
 		}
 		// 特别重要的地方， 增加钩子函数参数， 以便在主程序中处理事件
 		srv, err := NewServer(cfg, hook)
 		if err != nil {
-			svc.Engine().ServeStop("register ebpfgo error by server,", err.Error())
+			svc.Engine().ServeStop("register zobee error by server,", err.Error())
 			return nil
 		}
 		svc.Engine().Servers.Add(srv)
@@ -110,7 +113,7 @@ type Server struct {
 	state   monitorState
 }
 
-func NewServer(cfg Config, hook Hook) (z.Server, error) {
+func NewServer(cfg Config, hook Hook) (zoo.Server, error) {
 	rc, err := normalizeConfig(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("invalid config: %w", err)
@@ -150,7 +153,7 @@ func (s *Server) RunServe() {
 	s.mu.Unlock()
 
 	if err := s.run(); err != nil && !errors.Is(err, context.Canceled) {
-		z.Exit(fmt.Sprintf("[_zoobee_]: server exit error: %v\n", err))
+		zoc.Exit(fmt.Sprintf("[_zoobee_]: server exit error: %v\n", err))
 	}
 }
 

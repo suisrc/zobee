@@ -19,17 +19,12 @@ import (
 	"unsafe"
 )
 
-const (
-	pcapLinkTypeEthernet = 1
-	pcapSnapLen          = 65535
-)
-
 func compilePcapRules(rules string) ([]pcapRuleInsn, error) {
 	rules = strings.TrimSpace(rules)
 	if rules == "" {
 		return nil, nil
 	}
-	handle := C.pcap_open_dead(C.int(pcapLinkTypeEthernet), C.int(pcapSnapLen))
+	handle := C.pcap_open_dead(C.int(1), C.int(pcapSnapLen))
 	if handle == nil {
 		return nil, fmt.Errorf("pcap_open_dead failed")
 	}

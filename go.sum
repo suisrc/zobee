@@ -18,8 +18,6 @@ github.com/mdlayher/socket v0.5.1 h1:VZaqt6RkGkt2OE9l3GcC6nZkqD3xKeQLyfleW/uBcos
 github.com/mdlayher/socket v0.5.1/go.mod h1:TjPLHI1UgwEv5J1B5q0zTZq12A/6H7nKmtTanQE37IQ=
 github.com/rogpeppe/go-internal v1.12.0 h1:exVL4IDcn6na9z1rAb56Vxr+CgyK3nn3O+epU5NdKM8=
 github.com/rogpeppe/go-internal v1.12.0/go.mod h1:E+RYuTGaKKdloAfM02xzb0FW3Paa99yedzYV+kq4uf4=
-github.com/suisrc/zgg v0.5.4 h1:6nzbDVaxd9zueWXfq9gwVZEX6XGvMZ6WfLgTOEwji6o=
-github.com/suisrc/zgg v0.5.4/go.mod h1:xH+jv/cn5se2tT8v8LtAxsv5Pj6tR9uOtl4q92Lr/6E=
 github.com/suisrc/zoo v0.0.2 h1:S47x5rezgFJnOanJI2xqKCyolrzWNiFGKjCBYoMv1Rg=
 github.com/suisrc/zoo v0.0.2/go.mod h1:+Cn/QoERyl83dCNHND4SRzAYi+jOesb0xPJgtwJHTCw=
 golang.org/x/net v0.50.0 h1:ucWh9eiCGyDR3vtzso0WMQinm2Dnt8cFMuQa9K33J60=

@@ -8,13 +8,16 @@ import (
 	"fmt"
 	"os"
 
+	_ "embed"
 	_ "unsafe"
 
-	"github.com/suisrc/zgg/z"
-	"github.com/suisrc/zgg/z/ze/proc"
 	"github.com/suisrc/zoo"
 	"github.com/suisrc/zoo/zoc"
+	"github.com/suisrc/zoo/zoe/proc"
 )
+
+//go:embed zwbee
+var embeddedCaptureBin []byte
 
 type Hook func(map[string]any)
 
@@ -35,12 +38,12 @@ type Config struct {
 func Load(hook Hook) {
 
 	flag.BoolVar(&G.Config.Disabled, "b2disabled", true, "是否禁用zabee")
-	flag.StringVar(&G.Config.Command, "b2command", "zwbee", "命令")
-	flag.Var(z.NewStrArr(&G.Config.CmdArgs, []string{"-cpid", "<pid>"}), "b2cmdargs", "参数")
+	flag.StringVar(&G.Config.Command, "b2command", "./zwbee", "命令")
+	flag.Var(zoc.NewStrArr(&G.Config.CmdArgs, []string{"-cpid", "<pid>"}), "b2cmdargs", "参数")
 
 	zoo.Register("14-zabee", &G, func(svc zoo.SvcKit) zoo.Closed {
 		if G.Config.Disabled {
-			z.Logn("[_zaabee_]: disabled")
+			zoc.Logn("[_zaabee_]: disabled")
 			return nil
 		}
 		// 优先使用 command 中的参数， 如果参数不存在，在使用 args 中的参数
@@ -52,6 +55,19 @@ func Load(hook Hook) {
 		hdl.process = proc.NewProcess(hdl, cmd, FixCmdArgs(args)...)
 		svc.Engine().Servers.Add(hdl)
 
+		if cmd == "./zwbee" {
+			// 判断当前文件夹中是否哟 zwbee 命令，如果没有，使用 embeddedCaptureBin 中的内容创建
+			if _, err := os.Stat("./zwbee"); os.IsNotExist(err) {
+				if err := os.WriteFile("./zwbee", embeddedCaptureBin, 0755); err != nil {
+					svc.Engine().ServeStop("register zabee error by binary not found and created fail,", err.Error())
+					return nil
+				}
+				zoc.Logn("[_zaabee_]: zwbee binary created")
+				return func() {
+					_ = os.Remove("./zwbee") // 删除创建的 zwbee 命令， 忽略错误
+				}
+			}
+		}
 		return nil
 	})
 }
@@ -67,7 +83,7 @@ var FixCmdArgs = func(args []string) []string {
 	return args
 }
 
-var _ z.Server = (*Server)(nil)
+var _ zoo.Server = (*Server)(nil)
 
 type Server struct {
 	hook    Hook
@@ -88,7 +104,7 @@ func (hdl *Server) Addr() string {
 
 func (hdl *Server) RunServe() {
 	if err := hdl.process.Serve(); err != nil {
-		z.Exit(fmt.Sprintf("[_zaabee_]: process exit error: %s\n", err))
+		zoc.Exit(fmt.Sprintf("[_zaabee_]: process exit error: %s\n", err))
 	}
 }
 
@@ -98,6 +114,9 @@ func (hdl *Server) Shutdown(ctx context.Context) error {
 }
 
 func (hdl *Server) Write(p []byte) (n int, err error) {
+	if len(p) == 0 || bytes.Equal(p, []byte{'\n'}) {
+		return len(p), nil // 忽略空行和换行符
+	}
 	if hdl.hook != nil && bytes.HasPrefix(p, LOG_PRE) {
 		record := make(map[string]any)
 		if err := json.Unmarshal(p[len(LOG_PRE):], &record); err == nil {
@@ -106,6 +125,6 @@ func (hdl *Server) Write(p []byte) (n int, err error) {
 		}
 		zoc.Logn("[_zaabee_]: invalid record by json, ", string(p))
 	}
-	z.Logn("[_zaabee_]:", string(p))
+	zoc.Logn("[_zaabee_]:", string(p))
 	return len(p), nil
 }

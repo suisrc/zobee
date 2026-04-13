@@ -12,11 +12,6 @@ import (
 	"strings"
 )
 
-const (
-	pcapLinkTypeEthernet = 1
-	pcapSnapLen          = 65535
-)
-
 var tcpdumpInsnRe = regexp.MustCompile(`\{\s*([^}]*)\s*\}`)
 
 func compilePcapRules(rules string) ([]pcapRuleInsn, error) {

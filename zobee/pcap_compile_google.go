@@ -13,8 +13,7 @@ import (
 )
 
 const (
-	pcapLinkTypeEthernet = 1
-	pcapSnapLen          = 65535
+	pcapSnapLen = 65535
 )
 
 func compilePcapRules(rules string) ([]pcapRuleInsn, error) {
@@ -22,7 +21,7 @@ func compilePcapRules(rules string) ([]pcapRuleInsn, error) {
 	if rules == "" {
 		return nil, nil
 	}
-	instructions, err := pcapgo..CompileBPFFilter(pcapLinkTypeEthernet, pcapSnapLen, rules)
+	instructions, err := pcapgo..CompileBPFFilter(1, pcapSnapLen, rules)
 	if err != nil {
 		return nil, err
 	}
