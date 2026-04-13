@@ -1,0 +1,97 @@
+name: 'Build Image Logic'
+description: 'Build image steps for jobs'
+
+inputs:
+  github_token:
+    description: 'github registry workflow token'
+    required: true
+    secret: true
+  docker_user:
+    description: 'docker.io user name'
+  docker_token:
+    description: 'docker.io user token'
+    secret: true
+  quay_user:
+    description: 'quay.io user name'
+  quay_token:
+    description: 'quay.io user token'
+    secret: true
+  aliyun_user:
+    description: 'aliyun registry user name'
+  aliyun_token:
+    description: 'aliyun registry user token'
+    secret: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Setup version
+      shell: bash
+      run: |
+        TAG_NAME=${GITHUB_REF#refs/tags/}
+        echo ${TAG_NAME#v} > version
+        # echo $GITHUB_JOB > vname
+        echo "IMAGE_VERSION=${TAG_NAME#v}" >> $GITHUB_ENV
+        echo "IMAGE_VERNAME=${TAG_NAME#v}-`cat vname`" >> $GITHUB_ENV
+    - name: Build image
+      shell: bash
+      run: |
+        echo "appname: `cat vname`, version: `cat version`"
+        sed -i "s|app|`cat vname`|g" Dockerfile
+        docker build -t image --no-cache .
+        # make && docker build -t image --no-cache .
+
+    # 推送镜像到 GitHub Container Registry
+    - name: Push github
+      shell: bash
+      run: |
+        REGISTRY_URL=ghcr.io
+        echo "${{ inputs.github_token }}" | docker login $REGISTRY_URL -u ${{ github.actor }} --password-stdin
+        IMAGE_ID=$REGISTRY_URL/$GITHUB_REPOSITORY
+        echo IMAGE_ID=$IMAGE_ID
+        VERSION=$IMAGE_VERSION
+        echo VERSION=$VERSION
+        docker tag image $IMAGE_ID:$VERSION
+        docker push $IMAGE_ID:$VERSION
+
+    # 推送镜像到 Docker Hub（如果提供了 Docker Hub 凭据）
+    - name: Push docker
+      if: ${{ inputs.docker_user != '' && inputs.docker_token != '' }}
+      shell: bash
+      run: |
+        REGISTRY_URL=docker.io
+        echo "${{ inputs.docker_token }}" | docker login $REGISTRY_URL -u ${{ inputs.docker_user }} --password-stdin
+        IMAGE_ID=$REGISTRY_URL/$IMAGE_NAME
+        echo IMAGE_ID=$IMAGE_ID
+        VERSION=$IMAGE_VERNAME
+        echo VERSION=$VERSION
+        docker tag image $IMAGE_ID:$VERSION
+        docker push $IMAGE_ID:$VERSION
+
+    # 推送镜像到 Quay.io（如果提供了 Quay.io 凭据）
+    - name: Push quay
+      if: ${{ inputs.quay_user != '' && inputs.quay_token != '' }}
+      shell: bash
+      run: |
+        REGISTRY_URL=quay.io
+        echo "${{ inputs.quay_token }}" | docker login $REGISTRY_URL -u ${{ inputs.quay_user }} --password-stdin
+        IMAGE_ID=$REGISTRY_URL/$IMAGE_NAME
+        echo IMAGE_ID=$IMAGE_ID
+        VERSION=$IMAGE_VERNAME
+        echo VERSION=$VERSION
+        docker tag image $IMAGE_ID:$VERSION
+        docker push $IMAGE_ID:$VERSION
+
+    # 推送镜像到阿里云容器镜像服务（如果提供了阿里云凭据）
+    - name: Push aliyun
+      if: ${{ inputs.aliyun_user != '' && inputs.aliyun_token != '' }}
+      shell: bash
+      run: |
+        REGISTRY_URL=$ALIYUN_REGISTRY
+        echo "${{ inputs.aliyun_token }}" | docker login $REGISTRY_URL -u ${{ inputs.aliyun_user }} --password-stdin
+        IMAGE_ID=$REGISTRY_URL/$IMAGE_NAME
+        echo IMAGE_ID=$IMAGE_ID
+        VERSION=$IMAGE_VERNAME
+        echo VERSION=$VERSION
+        docker tag image $IMAGE_ID:$VERSION
+        docker push $IMAGE_ID:$VERSION

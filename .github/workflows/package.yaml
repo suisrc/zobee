@@ -1,0 +1,27 @@
+name: build-all
+
+on:
+  push:
+    # branches: [ main ]? | tags: [ "*-*" ]?
+    tags: [ "v*" ]
+
+env:
+  IMAGE_NAME: suisrc/zookit
+  ALIYUN_REGISTRY: registry.cn-hongkong.aliyuncs.com
+
+permissions:
+  packages: write # GHCR 镜像包写入权限（推送镜像核心）
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Use build
+        uses: ./.github/actions/build
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          # docker_user: ${{ secrets.DOCKER_USER }}
+          # docker_token: ${{ secrets.DOCKER_TOKEN }}
+          aliyun_user: ${{ secrets.ALIYUN_USER }}
+          aliyun_token: ${{ secrets.ALIYUN_TOKEN }}

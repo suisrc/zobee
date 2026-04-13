@@ -1,0 +1,35 @@
+!.vscode
+
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+.idea
+# core
+
+# Test binary, build with `go test -c`
+*.test
+
+.zoo
+# Other foler to ignore
+dist
+ksql
+logs
+tmpl
+www
+
+# Other files to ignore
+*.out
+*.log
+zoo.test.*
+api.test.*
+
+# atask.md ignore
+atask.md
+
+# 
+ebpf_capture_blob.o
+ebpf_capture.o
+monitor
