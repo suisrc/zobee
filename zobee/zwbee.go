@@ -311,7 +311,7 @@ func (s *Server) cleanup() {
 }
 
 func (s *Server) loadBPF() error {
-	spec, err := ebpf.LoadCollectionSpecFromReader(bytes.NewReader(embeddedCaptureObject))
+	spec, err := ebpf.LoadCollectionSpecFromReader(bytes.NewReader(embedCaptureObject))
 	if err != nil {
 		return fmt.Errorf("load embedded ebpf_capture.o: %w", err)
 	}

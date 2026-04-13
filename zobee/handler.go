@@ -23,7 +23,7 @@ const (
 )
 
 //go:embed ebpf_capture.o
-var embeddedCaptureObject []byte
+var embedCaptureObject []byte
 
 var (
 	G = struct {

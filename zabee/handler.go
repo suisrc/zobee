@@ -1,11 +1,13 @@
 package zabee
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 
 	_ "embed"
@@ -14,10 +16,11 @@ import (
 	"github.com/suisrc/zoo"
 	"github.com/suisrc/zoo/zoc"
 	"github.com/suisrc/zoo/zoe/proc"
+	"golang.org/x/sys/unix"
 )
 
 //go:embed zwbee
-var embeddedCaptureBin []byte
+var embedCaptureBin []byte
 
 type Hook func(map[string]any)
 
@@ -25,8 +28,6 @@ var (
 	G = struct {
 		Config Config `json:"zabee"`
 	}{}
-
-	LOG_PRE = []byte("EBPF_CAPTURE: ")
 )
 
 type Config struct {
@@ -47,27 +48,12 @@ func Load(hook Hook) {
 			return nil
 		}
 		// 优先使用 command 中的参数， 如果参数不存在，在使用 args 中的参数
-		cmd, args := proc.ParseCmd(G.Config.Command)
+		comm, args := proc.ParseCmd(G.Config.Command)
 		if len(args) == 0 {
 			args = G.Config.CmdArgs
 		}
-		hdl := &Server{hook: hook}
-		hdl.process = proc.NewProcess(hdl, cmd, FixCmdArgs(args)...)
+		hdl := &Server{comm: comm, args: args, hook: hook}
 		svc.Engine().Servers.Add(hdl)
-
-		if cmd == "./zwbee" {
-			// 判断当前文件夹中是否哟 zwbee 命令，如果没有，使用 embeddedCaptureBin 中的内容创建
-			if _, err := os.Stat("./zwbee"); os.IsNotExist(err) {
-				if err := os.WriteFile("./zwbee", embeddedCaptureBin, 0755); err != nil {
-					svc.Engine().ServeStop("register zabee error by binary not found and created fail,", err.Error())
-					return nil
-				}
-				zoc.Logn("[_zaabee_]: zwbee binary created")
-				return func() {
-					_ = os.Remove("./zwbee") // 删除创建的 zwbee 命令， 忽略错误
-				}
-			}
-		}
 		return nil
 	})
 }
@@ -86,8 +72,11 @@ var FixCmdArgs = func(args []string) []string {
 var _ zoo.Server = (*Server)(nil)
 
 type Server struct {
-	hook    Hook
-	process proc.Process
+	comm   string
+	args   []string
+	hook   Hook
+	proc   proc.Process
+	closer io.Closer
 }
 
 func (hdl *Server) Name() string {
@@ -95,36 +84,104 @@ func (hdl *Server) Name() string {
 }
 
 func (hdl *Server) Addr() string {
-	str := hdl.process.String()
-	if len(str) < 36 {
-		return str
-	}
-	return str[:36] + "..."
+	return hdl.comm + " ...(args)"
 }
 
 func (hdl *Server) RunServe() {
-	if err := hdl.process.Serve(); err != nil {
-		zoc.Exit(fmt.Sprintf("[_zaabee_]: process exit error: %s\n", err))
+	if hdl.proc == nil {
+		comm := hdl.comm
+		switch hdl.comm {
+		case "./zwbee":
+			// 判断当前文件夹中是否哟 zwbee 命令，如果没有，使用 embeddedCaptureBin 中的内容创建
+			if _, err := os.Stat("./zwbee"); os.IsNotExist(err) {
+				if err := os.WriteFile("./zwbee", embedCaptureBin, 0755); err != nil {
+					zoc.Exit("[_zaabee_]: write binary to ./zwbee error,", err.Error())
+				}
+				zoc.Logn("[_zaabee_]: zwbee binary write to ./zwbee")
+				// defer os.Remove("./zwbee") // 释放命令，不删除, 这个与 ./memfd 不同
+			}
+		case "./memfd":
+			// 使用 内存 利用Linux的 memfd_create 系统调用创建内核级匿名内存文件，完全不需要磁盘IO。
+			fd, err := unix.MemfdCreate("zwbee", unix.MFD_CLOEXEC)
+			if err != nil {
+				zoc.Exit("[_zaabee_]: create binary by memfd_create error,", err.Error())
+			}
+			// 将嵌入式二进制写入内存文件
+			if _, err := unix.Write(fd, embedCaptureBin); err != nil {
+				_ = unix.Close(fd)
+				zoc.Exit("[_zaabee_]: write binary to memfd error,", err.Error())
+			}
+			// 获取内存文件的文件描述符路径
+			comm = fmt.Sprintf("/proc/%d/fd/%d", os.Getpid(), fd)
+			// 更新命令为内存文件路径
+			zoc.Logn("[_zaabee_]: zwbee binary loaded into memory via memfd")
+			// 运行完成后关闭内存文件
+			// defer unix.Close(fd)
+			defer func() {
+				unix.Close(fd)
+				zoc.Logn("[_zaabee_]: zwbee binary in memfd closed")
+			}()
+		}
+		hdl.proc = proc.NewProcess(comm, FixCmdArgs(hdl.args)...)
+	}
+	// 创建管道，作为进程的 stdout 和 stderr，扫描器从管道的读端读取数据，直到进程退出或管道关闭
+	pr, pw, err := os.Pipe()
+	if err != nil {
+		zoc.Exit(fmt.Sprintf("[_zaabee_]: create pipe error: %s\n", err))
+	}
+	// defer pr.Close(); defer pw.Close()
+	wait, err := hdl.proc.Execute(pw, hdl)
+	if err != nil {
+		zoc.Exit(fmt.Sprintf("[_zaabee_]: process start error: %s\n", err))
+	}
+	pid := hdl.proc.Pid()
+	zoc.Logn("[_zaabee_]: ---------------- process started, pid=", pid)
+	hdl.closer = pr // 将管道的读端作为 closer， 在 Shutdown 中关闭它，通知扫描器进程退出
+	go func() {
+		wait() // 等待进程退出, 更新进程状态
+		if hdl.closer != nil {
+			_ = hdl.closer.Close()
+			hdl.closer = nil
+		}
+	}()
+	hdl.scanToHook(pr) // 扫描进程输出，直到进程退出或管道关闭
+	zoc.Logn("[_zaabee_]: ---------------- process exited, pid=", pid)
+}
+
+func (hdl *Server) scanToHook(pr io.ReadCloser) {
+	ePreKey := []byte("EBPF_CAPTURE: ")
+	scaner := bufio.NewScanner(pr)
+	for scaner.Scan() {
+		line := scaner.Bytes()
+		if len(line) == 0 || bytes.Equal(line, []byte{'\n'}) {
+			continue // 忽略空行和换行符
+		}
+		if hdl.hook != nil && bytes.HasPrefix(line, ePreKey) {
+			record := make(map[string]any)
+			if err := json.Unmarshal(line[len(ePreKey):], &record); err == nil {
+				hdl.hook(record)
+				continue
+			}
+			zoc.Logn("[_zaabee_]: invalid record by json, ", string(line))
+		} else {
+			zoc.Logn("[_zaabee_]:", string(line))
+		}
 	}
 }
 
 func (hdl *Server) Shutdown(ctx context.Context) error {
-	_ = hdl.process.Stop(0) // 发送 SIGTERM 信号，等待进程退出, 忽略错误
+	if hdl.closer != nil {
+		_ = hdl.closer.Close()
+		hdl.closer = nil
+	}
+	_ = hdl.proc.Stop(0) // 发送 SIGTERM 信号，等待进程退出, 忽略错误
 	return nil
 }
 
 func (hdl *Server) Write(p []byte) (n int, err error) {
-	if len(p) == 0 || bytes.Equal(p, []byte{'\n'}) {
-		return len(p), nil // 忽略空行和换行符
+	if len(p) == 0 {
+		return 0, nil
 	}
-	if hdl.hook != nil && bytes.HasPrefix(p, LOG_PRE) {
-		record := make(map[string]any)
-		if err := json.Unmarshal(p[len(LOG_PRE):], &record); err == nil {
-			hdl.hook(record)
-			return len(p), nil
-		}
-		zoc.Logn("[_zaabee_]: invalid record by json, ", string(p))
-	}
-	zoc.Logn("[_zaabee_]:", string(p))
+	zoc.Logn("[_zaabee_]: ", string(p))
 	return len(p), nil
 }

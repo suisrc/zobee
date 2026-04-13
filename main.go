@@ -5,9 +5,9 @@ import (
 	"fmt"
 
 	_ "zobee/cmd"
-	app "zobee/zabee"
 
-	// app "zobee/zobee"
+	app "zobee/zobee"
+	// app "zobee/zabee"
 
 	"github.com/suisrc/zoo"
 	"github.com/suisrc/zoo/zoc"
