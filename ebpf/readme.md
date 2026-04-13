@@ -41,7 +41,7 @@ sudo ./zwbee -interface eth0
 
 常用参数：
 - `-interface eth0` 监听接口
-- `-pcap-rules 'tcp port 80 or tcp port 443'` 可选的内核侧 pcap 过滤规则，默认空，编译后最多 256 条指令
+- `-pcap-rules 'tcp port 80 or tcp port 443'` 可选的内核侧 pcap 过滤规则，默认空，编译后最多 256 条指令, 使用该参数，依赖 tcpdump 命令
 - `-direction ingress|egress` 只看入站或出站流量，默认双向
 - `-pid 123` 按进程 pid 过滤
 - `-cpid 123` 按容器内 pid 过滤
