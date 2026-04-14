@@ -3,7 +3,7 @@ LD ?= ld
 UNAME_R := $(shell uname -r)
 
 # 自动检测发行版
-OS_ID := $(shell grep -oP '^ID=\K\w+' /etc/os-release 2>/dev/null || echo "unknown")
+OS_ID := $(shell . /etc/os-release 2>/dev/null; echo $$ID)
 
 # 通用内核头文件路径
 KERNEL_HEADERS_BASE := 
