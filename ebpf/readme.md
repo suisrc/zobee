@@ -21,7 +21,7 @@ make all
 
 ```sh
 apt update
-apt install -y clang llvm libbpf-dev libelf-dev libpcap-dev libelf1 pkg-config libssl-dev zlib1g-dev git make bpftool iproute2
+apt install -y build-essential clang llvm libbpf-dev libelf-dev libpcap-dev libelf1 pkg-config libssl-dev zlib1g-dev git make bpftool iproute2
 apt install -y linux-headers-$(uname -r)
 ```
 

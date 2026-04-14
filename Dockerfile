@@ -1,12 +1,14 @@
 FROM golang:1.25-alpine3.23 AS build
 
 RUN apk add --no-cache git \
+  build-base \
   clang \
   llvm \
+  lld \
   libbpf-dev \
   elfutils-dev \
-  libpcap-dev \
   elfutils-libelf \
+  libpcap-dev \
   pkgconf \
   openssl-dev \
   zlib-dev \
