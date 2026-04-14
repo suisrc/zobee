@@ -43,8 +43,8 @@ hello:
 push:
 	git push --set-upstream origin $b
 
-sync:
-	cp -f ebpf/ebpf_capture.o zobee/ebpf_capture.o && cp -f ebpf/zwbee zobee/zwbee
+syncc:
+	cp -f ebpf/ebpf_capture.o zobee/ebpf_capture.o && cp -f ebpf/zwbee zabee/zwbee
 
 git:
 	@if [ -z "$(tag)" ]; then \
