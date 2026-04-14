@@ -5,6 +5,7 @@ RUN apk add --no-cache git \
   clang \
   llvm \
   lld \
+  linux-headers \
   libbpf-dev \
   elfutils-dev \
   elfutils-libelf \

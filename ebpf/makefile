@@ -20,29 +20,29 @@ ARCH := $(shell uname -m)
 ifeq ($(ARCH), x86_64)
 	TARGET_ARCH := x86
 	ARCH_INCLUDE := $(KERNEL_HEADERS)/arch/x86/include/generated/uapi
-	TRIPLET_INCLUDE := /usr/include/x86_64-linux-gnu
+	TRIPLET_INCLUDE := -I/usr/include/x86_64-linux-gnu
 else ifeq ($(ARCH), aarch64)
 	TARGET_ARCH := arm64
 	ARCH_INCLUDE := $(KERNEL_HEADERS)/arch/arm64/include/generated/uapi
-	TRIPLET_INCLUDE := /usr/include/aarch64-linux-gnu
+	TRIPLET_INCLUDE := -I/usr/include/aarch64-linux-gnu
 else ifeq ($(ARCH), armv7l)
 	TARGET_ARCH := arm
 	ARCH_INCLUDE := $(KERNEL_HEADERS)/arch/arm/include/generated/uapi
-	TRIPLET_INCLUDE := /usr/include/arm-linux-gnueabihf
+	TRIPLET_INCLUDE := -I/usr/include/arm-linux-gnueabihf
 else
 	TARGET_ARCH := $(ARCH)
 	ARCH_INCLUDE :=
-	TRIPLET_INCLUDE := /usr/include/$(ARCH)-linux-gnu
+	TRIPLET_INCLUDE := -I/usr/include/$(ARCH)-linux-gnu
 endif
 
 # Alpine特殊处理：如果是Alpine，内核头文件直接在/usr/include，且没有架构子目录
 ifeq ($(OS_ID), alpine)
 	ARCH_INCLUDE := /usr/include
-	TRIPLET_INCLUDE := /usr/include/bpf
+	TRIPLET_INCLUDE := 
 endif
 
 # BPF编译通用参数
-BPF_CFLAGS = -O2 -target bpf -g -D__TARGET_ARCH_$(TARGET_ARCH) -I$(ARCH_INCLUDE) -I$(TRIPLET_INCLUDE)
+BPF_CFLAGS = -O2 -target bpf -g -D__TARGET_ARCH_$(TARGET_ARCH) -I$(ARCH_INCLUDE) $(TRIPLET_INCLUDE)
 
 all: ebpf_capture.o ebpf_capture_blob.o zwbee
 
