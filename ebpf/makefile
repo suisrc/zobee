@@ -44,6 +44,12 @@ endif
 # BPF编译通用参数
 BPF_CFLAGS = -O2 -target bpf -g -D__TARGET_ARCH_$(TARGET_ARCH) -I$(ARCH_INCLUDE) $(TRIPLET_INCLUDE)
 
+ifeq ($(OS_ID), alpine)
+	BIN_CFLAGS = -lbpf -lelf -lzstd -lz
+else
+	BIN_CFLAGS = -lbpf -lelf -lz
+endif
+
 all: ebpf_capture.o ebpf_capture_blob.o zwbee
 
 ebpf_capture.o: ebpf_capture.c
@@ -55,7 +61,7 @@ ebpf_capture_blob.o: ebpf_capture.o
 # zwbee 现在不再链接 libpcap(-lpcap)；-pcap-rules 由运行时调用 tcpdump -ddd 编译。
 # 如果后续要做全静态，只需要保证 tcpdump 可用，zwbee 本身无需再引入 libpcap 依赖。
 zwbee: zwbee.c ebpf_capture_blob.o
-	$(CLANG) -O2 -static -o zwbee zwbee.c ebpf_capture_blob.o -lbpf -lelf -lz && cp -f zwbee ../zabee/zwbee
+	$(CLANG) -O2 -static -o zwbee zwbee.c ebpf_capture_blob.o $(BIN_CFLAGS) && cp -f zwbee ../zabee/zwbee
 
 clean:
 	rm -f ebpf_capture.o ebpf_capture_blob.o zwbee
