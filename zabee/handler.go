@@ -39,7 +39,7 @@ var (
 
 // func init() { Load() } // 通过 init 函数注册服务， 以便在主程序中自动加载
 
-func Load(hook Hook) {
+func Load(hook Hook, conf *Config) {
 
 	flag.BoolVar(&G.Config.Disabled, "e3disabled", true, "是否禁用 zobee")
 	flag.StringVar(&G.Config.IfName, "e3ifname", "", "抓包网卡名称")
@@ -56,11 +56,14 @@ func Load(hook Hook) {
 	flag.Int64Var(&G.Config.MaxBodySize, "e3maxbodysize", -1, "HTTP body 保留上限，默认 -1")
 
 	zoo.Register("14-zobee", &G, func(svc zoo.SvcKit) zoo.Closed {
-		if G.Config.Disabled {
+		if conf == nil {
+			conf = &G.Config
+		}
+		if conf.Disabled {
 			zoc.Logn("[_zoobee_]: disabled")
 			return nil
 		}
-		cfg := normalizeInitConfig(G.Config)
+		cfg := normalizeInitConfig(conf)
 		if _, err := normalizeConfig(cfg); err != nil {
 			svc.Engine().ServeStop("register zobee error by config,", err.Error())
 			return nil
@@ -79,7 +82,7 @@ func Load(hook Hook) {
 	})
 }
 
-func normalizeInitConfig(cfg Config) Config {
+func normalizeInitConfig(cfg *Config) *Config {
 	cfg.IfName = strings.TrimSpace(cfg.IfName)
 	cfg.PcapRules = strings.TrimSpace(cfg.PcapRules)
 	cfg.Direction = strings.TrimSpace(cfg.Direction)
@@ -113,7 +116,7 @@ type Server struct {
 	state   monitorState
 }
 
-func NewServer(cfg Config, hook Hook) (zoo.Server, error) {
+func NewServer(cfg *Config, hook Hook) (zoo.Server, error) {
 	rc, err := normalizeConfig(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("invalid config: %w", err)

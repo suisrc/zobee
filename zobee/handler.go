@@ -25,7 +25,7 @@ type Hook func(map[string]any)
 
 var (
 	G = struct {
-		Config Config `json:"zabee"`
+		Config Config `json:"zobee"`
 	}{}
 )
 
@@ -35,21 +35,24 @@ type Config struct {
 	CmdArgs  []string `json:"cmdargs"`
 }
 
-func Load(hook Hook) {
+func Load(hook Hook, conf *Config) {
 
-	flag.BoolVar(&G.Config.Disabled, "b2disabled", true, "是否禁用zabee")
-	flag.StringVar(&G.Config.Command, "b2command", "./zwbee", "命令")
-	flag.Var(zoc.NewStrArr(&G.Config.CmdArgs, []string{"-cpid", "<pid>"}), "b2cmdargs", "参数")
+	flag.BoolVar(&G.Config.Disabled, "e3disabled", true, "是否禁用zobee")
+	flag.StringVar(&G.Config.Command, "e3command", "./zwbee", "命令")
+	flag.Var(zoc.NewStrArr(&G.Config.CmdArgs, []string{"-cpid", "<pid>"}), "e3cmdargs", "参数")
 
-	zoo.Register("14-zabee", &G, func(svc zoo.SvcKit) zoo.Closed {
-		if G.Config.Disabled {
-			zoc.Logn("[_zaabee_]: disabled")
+	zoo.Register("14-zobee", &G, func(svc zoo.SvcKit) zoo.Closed {
+		if conf == nil {
+			conf = &G.Config
+		}
+		if conf.Disabled {
+			zoc.Logn("[_zoobee_]: disabled")
 			return nil
 		}
 		// 优先使用 command 中的参数， 如果参数不存在，在使用 args 中的参数
-		comm, args := proc.ParseCmd(G.Config.Command)
+		comm, args := proc.ParseCmd(conf.Command)
 		if len(args) == 0 {
-			args = G.Config.CmdArgs
+			args = conf.CmdArgs
 		}
 		hdl := &Server{comm: comm, args: args, hook: hook}
 		svc.Engine().Servers.Add(hdl)
@@ -94,31 +97,31 @@ func (hdl *Server) RunServe() {
 			// 判断当前文件夹中是否哟 zwbee 命令，如果没有，使用 embeddedCaptureBin 中的内容创建
 			if _, err := os.Stat("./zwbee"); os.IsNotExist(err) {
 				if err := os.WriteFile("./zwbee", embedCaptureBin, 0755); err != nil {
-					zoc.Exit("[_zaabee_]: write binary to ./zwbee error,", err.Error())
+					zoc.Exit("[_zoobee_]: write binary to ./zwbee error,", err.Error())
 				}
-				zoc.Logn("[_zaabee_]: zwbee binary write to ./zwbee")
+				zoc.Logn("[_zoobee_]: zwbee binary write to ./zwbee")
 				// defer os.Remove("./zwbee") // 释放命令，不删除, 这个与 ./memfd 不同
 			}
 		case "./memfd":
 			// 使用 内存 利用Linux的 memfd_create 系统调用创建内核级匿名内存文件，完全不需要磁盘IO。
 			fd, err := MemfdCreate("zwbee", MFD_CLOEXEC)
 			if err != nil {
-				zoc.Exit("[_zaabee_]: create binary by memfd_create error,", err.Error())
+				zoc.Exit("[_zoobee_]: create binary by memfd_create error,", err.Error())
 			}
 			// 将嵌入式二进制写入内存文件
 			if _, err := MemfdWrite(fd, embedCaptureBin); err != nil {
 				_ = MemfdClose(fd)
-				zoc.Exit("[_zaabee_]: write binary to memfd error,", err.Error())
+				zoc.Exit("[_zoobee_]: write binary to memfd error,", err.Error())
 			}
 			// 获取内存文件的文件描述符路径
 			comm = fmt.Sprintf("/proc/%d/fd/%d", os.Getpid(), fd)
 			// 更新命令为内存文件路径
-			zoc.Logn("[_zaabee_]: zwbee binary loaded into memory via memfd")
+			zoc.Logn("[_zoobee_]: zwbee binary loaded into memory via memfd")
 			// 运行完成后关闭内存文件
 			// defer unix.Close(fd)
 			defer func() {
 				MemfdClose(fd)
-				zoc.Logn("[_zaabee_]: zwbee binary in memfd closed")
+				zoc.Logn("[_zoobee_]: zwbee binary in memfd closed")
 			}()
 		}
 		hdl.proc = proc.NewProcess(comm, FixCmdArgs(hdl.args)...)
@@ -126,15 +129,15 @@ func (hdl *Server) RunServe() {
 	// 创建管道，作为进程的 stdout 和 stderr，扫描器从管道的读端读取数据，直到进程退出或管道关闭
 	pr, pw, err := os.Pipe()
 	if err != nil {
-		zoc.Exit(fmt.Sprintf("[_zaabee_]: create pipe error: %s\n", err))
+		zoc.Exit(fmt.Sprintf("[_zoobee_]: create pipe error: %s\n", err))
 	}
 	// defer pr.Close(); defer pw.Close()
 	wait, err := hdl.proc.Execute(pw, hdl)
 	if err != nil {
-		zoc.Exit(fmt.Sprintf("[_zaabee_]: process start error: %s\n", err))
+		zoc.Exit(fmt.Sprintf("[_zoobee_]: process start error: %s\n", err))
 	}
 	pid := hdl.proc.Pid()
-	zoc.Logn("[_zaabee_]: ---------------- process started, pid=", pid)
+	zoc.Logn("[_zoobee_]: ---------------- process started, pid=", pid)
 	hdl.closer = pr // 将管道的读端作为 closer， 在 Shutdown 中关闭它，通知扫描器进程退出
 	go func() {
 		wait() // 等待进程退出, 更新进程状态
@@ -144,7 +147,7 @@ func (hdl *Server) RunServe() {
 		}
 	}()
 	hdl.scanToHook(pr) // 扫描进程输出，直到进程退出或管道关闭
-	zoc.Logn("[_zaabee_]: ---------------- process exited, pid=", pid)
+	zoc.Logn("[_zoobee_]: ---------------- process exited, pid=", pid)
 }
 
 func (hdl *Server) scanToHook(pr io.ReadCloser) {
@@ -161,9 +164,9 @@ func (hdl *Server) scanToHook(pr io.ReadCloser) {
 				hdl.hook(record)
 				continue
 			}
-			zoc.Logn("[_zaabee_]: invalid record by json, ", string(line))
+			zoc.Logn("[_zoobee_]: invalid record by json, ", string(line))
 		} else {
-			zoc.Logn("[_zaabee_]:", string(line))
+			zoc.Logn("[_zoobee_]:", string(line))
 		}
 	}
 }
@@ -181,6 +184,6 @@ func (hdl *Server) Write(p []byte) (n int, err error) {
 	if len(p) == 0 {
 		return 0, nil
 	}
-	zoc.Logn("[_zaabee_]: ", string(p))
+	zoc.Logn("[_zoobee_]: ", string(p))
 	return len(p), nil
 }

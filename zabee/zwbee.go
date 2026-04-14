@@ -924,7 +924,7 @@ func (s *Server) flowGC(cutoff time.Time) {
 	}
 }
 
-func normalizeConfig(cfg Config) (runtimeConfig, error) {
+func normalizeConfig(cfg *Config) (runtimeConfig, error) {
 	rc := runtimeConfig{
 		IfName:    strings.TrimSpace(cfg.IfName),
 		PcapRules: strings.TrimSpace(cfg.PcapRules),
