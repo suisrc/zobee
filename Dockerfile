@@ -13,6 +13,7 @@ RUN apk add --no-cache git \
   pkgconf \
   openssl-dev \
   zlib-dev \
+  zlib-static \
   git \
   make \
   bpftool \
