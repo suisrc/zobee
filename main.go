@@ -3,10 +3,10 @@ package main
 import (
 	_ "embed"
 
-	_ "zobee/cmd"
+	_ "github.com/suisrc/zobee/cmd"
 
 	// app "zobee/zobee"
-	app "zobee/zabee"
+	app "github.com/suisrc/zobee/zabee"
 
 	"github.com/suisrc/zoo"
 	"github.com/suisrc/zoo/zoc"

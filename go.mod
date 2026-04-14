@@ -1,4 +1,4 @@
-module zobee
+module github.com/suisrc/zobee
 
 go 1.25.5
 
