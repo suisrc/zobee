@@ -21,3 +21,6 @@ zwbee: zwbee.c ebpf_capture_blob.o
 
 clean:
 	rm -f ebpf_capture.o ebpf_capture_blob.o zwbee
+
+sync:
+	cp -f ebpf_capture.o ../zobee/ebpf_capture.o && cp -f zwbee ../zabee/zwbee

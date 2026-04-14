@@ -43,10 +43,13 @@ hello:
 push:
 	git push --set-upstream origin $b
 
+sync:
+	cp -f ebpf/ebpf_capture.o zobee/ebpf_capture.o && cp -f ebpf/zwbee zobee/zwbee
+
 git:
 	@if [ -z "$(tag)" ]; then \
 		echo "error: 'tag' not specified! Please specify the 'tag' using 'make git tag=(version)";\
 		exit 1; \
 	fi
-	git add zobee/ebpf_capture.o zabee/zwbee && git commit -m "add ebpf_capture.o and zwbee" && \
+	git add zobee/ebpf_capture.o zabee/zwbee -f && git commit -m "add ebpf_capture.o and zwbee" && \
 	git tag -a $(tag) -m "${tag}" && git push origin $(tag) && git reset --hard HEAD~1
