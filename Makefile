@@ -51,5 +51,5 @@ git:
 		echo "error: 'tag' not specified! Please specify the 'tag' using 'make git tag=(version)";\
 		exit 1; \
 	fi
-	git add zobee/ebpf_capture.o zabee/zwbee -f && git commit -m "add ebpf_capture.o and zwbee" && \
+	make syncc && git add zobee/ebpf_capture.o zabee/zwbee -f && git commit -m "add ebpf_capture.o and zwbee" && \
 	git tag -a $(tag) -m "${tag}" && git push origin $(tag) && git reset --hard HEAD~1

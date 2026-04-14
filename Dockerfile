@@ -1,4 +1,4 @@
-FROM golang:1.25-alpine3.23 AS build_deps
+FROM golang:1.25-alpine3.23 AS build
 
 RUN apk add --no-cache git \
   clang \
@@ -16,12 +16,6 @@ RUN apk add --no-cache git \
   iproute2
 
 WORKDIR /opt
-COPY go.mod .
-COPY go.sum .
-RUN go mod download
-
-FROM build_deps AS build
-
 COPY . .
 RUN cd ebpf && make
 RUN CGO_ENABLED=0 go build -o app -ldflags '-w -extldflags "-static"' .
