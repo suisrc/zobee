@@ -18,6 +18,8 @@ RUN apk add --no-cache git \
   bpftool \
   iproute2
 
+RUN ls -l /usr/lib/ | grep libz
+
 WORKDIR /opt
 COPY . .
 RUN cd ebpf && make
