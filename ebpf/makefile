@@ -10,7 +10,7 @@ KERNEL_HEADERS_BASE :=
 # Alpine的内核头文件路径不同
 ifeq ($(OS_ID), alpine)
 	KERNEL_HEADERS := /usr/include
-	# Alpine默认没有内核版本号子目录，如果安装了linux-dev包直接用/usr/include
+	# Alpine默认没有内核版本号子目录
 else
 	KERNEL_HEADERS := /usr/src/linux-headers-$(UNAME_R)
 endif
@@ -35,12 +35,10 @@ else
 	TRIPLET_INCLUDE := /usr/include/$(ARCH)-linux-gnu
 endif
 
-# 如果上面计算的路径不存在，则回退到 /usr/include，保证编译能找到头文件
-ifeq ($(wildcard $(ARCH_INCLUDE)),)
+# Alpine特殊处理：如果是Alpine，内核头文件直接在/usr/include，且没有架构子目录
+ifeq ($(OS_ID), alpine)
 	ARCH_INCLUDE := /usr/include
-endif
-ifeq ($(wildcard $(TRIPLET_INCLUDE)),)
-	TRIPLET_INCLUDE := /usr/include
+	TRIPLET_INCLUDE := /usr/include/bpf
 endif
 
 # BPF编译通用参数
