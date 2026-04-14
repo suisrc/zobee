@@ -3,7 +3,6 @@ FROM golang:1.25-alpine3.23 AS build
 RUN apk add --no-cache git \
   clang \
   llvm \
-  linux-dev \
   libbpf-dev \
   elfutils-dev \
   libpcap-dev \

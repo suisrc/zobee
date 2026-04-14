@@ -53,3 +53,6 @@ git:
 	fi
 	make syncc && git add zobee/ebpf_capture.o zabee/zwbee -f && git commit -m "add ebpf_capture.o and zwbee" && \
 	git tag -a $(tag) -m "${tag}" && git push origin $(tag) && git reset --hard HEAD~1
+
+git-try:
+	git push origin $(shell git describe --tags --abbrev=0) && git reset --hard HEAD~1
