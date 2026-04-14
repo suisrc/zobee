@@ -16,7 +16,6 @@ import (
 	"github.com/suisrc/zoo"
 	"github.com/suisrc/zoo/zoc"
 	"github.com/suisrc/zoo/zoe/proc"
-	"golang.org/x/sys/unix"
 )
 
 //go:embed zwbee
@@ -102,13 +101,13 @@ func (hdl *Server) RunServe() {
 			}
 		case "./memfd":
 			// 使用 内存 利用Linux的 memfd_create 系统调用创建内核级匿名内存文件，完全不需要磁盘IO。
-			fd, err := unix.MemfdCreate("zwbee", unix.MFD_CLOEXEC)
+			fd, err := MemfdCreate("zwbee", MFD_CLOEXEC)
 			if err != nil {
 				zoc.Exit("[_zaabee_]: create binary by memfd_create error,", err.Error())
 			}
 			// 将嵌入式二进制写入内存文件
-			if _, err := unix.Write(fd, embedCaptureBin); err != nil {
-				_ = unix.Close(fd)
+			if _, err := MemfdWrite(fd, embedCaptureBin); err != nil {
+				_ = MemfdClose(fd)
 				zoc.Exit("[_zaabee_]: write binary to memfd error,", err.Error())
 			}
 			// 获取内存文件的文件描述符路径
@@ -118,7 +117,7 @@ func (hdl *Server) RunServe() {
 			// 运行完成后关闭内存文件
 			// defer unix.Close(fd)
 			defer func() {
-				unix.Close(fd)
+				MemfdClose(fd)
 				zoc.Logn("[_zaabee_]: zwbee binary in memfd closed")
 			}()
 		}
