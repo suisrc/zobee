@@ -21,7 +21,7 @@ RUN apk add --no-cache git \
   bpftool \
   iproute2
 
-RUN ls -l /usr/lib/ | grep libz
+# RUN ls -l /usr/lib/ | grep libz
 
 WORKDIR /opt
 COPY . .
@@ -34,5 +34,9 @@ RUN apk add --no-cache ca-certificates tzdata tcpdump
 
 WORKDIR /opt
 COPY --from=build /opt/app /opt/app
+
+# alpine 对应的 中间产物， 用于嵌入到最终镜像中
+COPY --from=build /opt/ebpf/zwbee /opt/zwbee
+COPY --from=build /opt/ebpf/ebpf_capture.o /opt/ebpf_capture.o
 
 ENTRYPOINT ["./app"]
