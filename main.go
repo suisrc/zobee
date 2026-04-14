@@ -5,8 +5,8 @@ import (
 
 	_ "github.com/suisrc/zobee/cmd"
 
-	// app "github.com/suisrc/zobee/zobee"
-	app "github.com/suisrc/zobee/zabee"
+	app "github.com/suisrc/zobee/zobee"
+	// app "github.com/suisrc/zobee/zabee"
 
 	"github.com/suisrc/zoo"
 	"github.com/suisrc/zoo/zoc"

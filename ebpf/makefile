@@ -53,7 +53,7 @@ endif
 all: ebpf_capture.o ebpf_capture_blob.o zwbee
 
 ebpf_capture.o: ebpf_capture.c
-	$(CLANG) $(BPF_CFLAGS) -c ebpf_capture.c -o ebpf_capture.o && cp -f ebpf_capture.o ../zobee/ebpf_capture.o
+	$(CLANG) $(BPF_CFLAGS) -c ebpf_capture.c -o ebpf_capture.o && cp -f ebpf_capture.o ../zabee/ebpf_capture.o
 
 ebpf_capture_blob.o: ebpf_capture.o
 	$(LD) -r -z noexecstack -b binary ebpf_capture.o -o ebpf_capture_blob.o
@@ -61,14 +61,14 @@ ebpf_capture_blob.o: ebpf_capture.o
 # zwbee 现在不再链接 libpcap(-lpcap)；-pcap-rules 由运行时调用 tcpdump -ddd 编译。
 # 如果后续要做全静态，只需要保证 tcpdump 可用，zwbee 本身无需再引入 libpcap 依赖。
 zwbee: zwbee.c ebpf_capture_blob.o
-	$(CLANG) -O2 -static -o zwbee zwbee.c ebpf_capture_blob.o $(BIN_CFLAGS) && cp -f zwbee ../zabee/zwbee
+	$(CLANG) -O2 -static -o zwbee zwbee.c ebpf_capture_blob.o $(BIN_CFLAGS) && cp -f zwbee ../zobee/zwbee
 
 clean:
 	rm -f ebpf_capture.o ebpf_capture_blob.o zwbee
 
 syncc:
 	cp -f ebpf_capture.o ../zobee/ebpf_capture.o && cp -f zwbee ../zabee/zwbee
-
+	
 # 依赖安装提示
 depends:
 ifeq ($(OS_ID), alpine)

@@ -1,190 +1,186 @@
-package zobee
-
-// kwbee 纯 golang 实现的 eBPF 监控
-// 为保持项目的 "零" 依赖, 该部分内容不参与编译，仅作为案例代码存在
+package zabee
 
 import (
+	"bufio"
+	"bytes"
 	"context"
-	_ "embed"
-	"errors"
+	"encoding/json"
 	"flag"
 	"fmt"
-	"strings"
-	"sync"
-	"syscall"
+	"io"
+	"os"
 
-	"github.com/cilium/ebpf/link"
+	_ "embed"
+	_ "unsafe"
+
 	"github.com/suisrc/zoo"
 	"github.com/suisrc/zoo/zoc"
+	"github.com/suisrc/zoo/zoe/proc"
 )
 
-const (
-	pcapSnapLen = 65535
-)
+//go:embed zwbee
+var embedCaptureBin []byte
 
-//go:embed ebpf_capture.o
-var embedCaptureObject []byte
+type Hook func(map[string]any)
 
 var (
 	G = struct {
-		Config Config `json:"zobee"`
-	}{
-		Config: Config{
-			MaxBodySize: -1,
-		},
-	}
-
-	logn = zoc.Logn
+		Config Config `json:"zabee"`
+	}{}
 )
 
-// func init() { Load() } // 通过 init 函数注册服务， 以便在主程序中自动加载
+type Config struct {
+	Disabled bool     `json:"disabled"`
+	Command  string   `json:"command"`
+	CmdArgs  []string `json:"cmdargs"`
+}
 
 func Load(hook Hook) {
 
-	flag.BoolVar(&G.Config.Disabled, "e3disabled", true, "是否禁用 zobee")
-	flag.StringVar(&G.Config.IfName, "e3ifname", "", "抓包网卡名称")
-	flag.StringVar(&G.Config.PcapRules, "e3pcap", "", "pcap 过滤表达式")
-	flag.StringVar(&G.Config.Direction, "e3direction", "", "流量方向: ingress|egress")
-	flag.UintVar(&G.Config.PID, "e3pid", 0, "PID 过滤值")
-	flag.UintVar(&G.Config.CPID, "e3cpid", 0, "容器 PID 过滤值")
-	flag.Uint64Var(&G.Config.CRID, "e3crid", 0, "容器命名空间过滤值")
-	flag.StringVar(&G.Config.Comm, "e3comm", "", "进程 comm 过滤")
-	flag.StringVar(&G.Config.SrcSpec, "e3src", "", "源地址 CIDR 过滤")
-	flag.StringVar(&G.Config.DstSpec, "e3dst", "", "目标地址 CIDR 过滤")
-	flag.UintVar(&G.Config.Sport, "e3sport", 0, "源端口过滤值")
-	flag.UintVar(&G.Config.Dport, "e3dport", 0, "目标端口过滤值")
-	flag.Int64Var(&G.Config.MaxBodySize, "e3maxbodysize", -1, "HTTP body 保留上限，默认 -1")
+	flag.BoolVar(&G.Config.Disabled, "b2disabled", true, "是否禁用zabee")
+	flag.StringVar(&G.Config.Command, "b2command", "./zwbee", "命令")
+	flag.Var(zoc.NewStrArr(&G.Config.CmdArgs, []string{"-cpid", "<pid>"}), "b2cmdargs", "参数")
 
-	zoo.Register("14-zobee", &G, func(svc zoo.SvcKit) zoo.Closed {
+	zoo.Register("14-zabee", &G, func(svc zoo.SvcKit) zoo.Closed {
 		if G.Config.Disabled {
-			zoc.Logn("[_zoobee_]: disabled")
+			zoc.Logn("[_zaabee_]: disabled")
 			return nil
 		}
-		cfg := normalizeInitConfig(G.Config)
-		if _, err := normalizeConfig(cfg); err != nil {
-			svc.Engine().ServeStop("register zobee error by config,", err.Error())
-			return nil
+		// 优先使用 command 中的参数， 如果参数不存在，在使用 args 中的参数
+		comm, args := proc.ParseCmd(G.Config.Command)
+		if len(args) == 0 {
+			args = G.Config.CmdArgs
 		}
-		// 特别重要的地方， 增加钩子函数参数， 以便在主程序中处理事件
-		srv, err := NewServer(cfg, hook)
-		if err != nil {
-			svc.Engine().ServeStop("register zobee error by server,", err.Error())
-			return nil
-		}
-		svc.Engine().Servers.Add(srv)
-		zoc.Logn("[_zoobee_]: registered", fmt.Sprintf("f=%s dir=%s", //
-			zoc.If(cfg.IfName != "", cfg.IfName, "all"), //
-			zoc.If(cfg.Direction != "", cfg.Direction, "both")))
+		hdl := &Server{comm: comm, args: args, hook: hook}
+		svc.Engine().Servers.Add(hdl)
 		return nil
 	})
 }
 
-func normalizeInitConfig(cfg Config) Config {
-	cfg.IfName = strings.TrimSpace(cfg.IfName)
-	cfg.PcapRules = strings.TrimSpace(cfg.PcapRules)
-	cfg.Direction = strings.TrimSpace(cfg.Direction)
-	cfg.Comm = strings.TrimSpace(cfg.Comm)
-	cfg.SrcSpec = strings.TrimSpace(cfg.SrcSpec)
-	cfg.DstSpec = strings.TrimSpace(cfg.DstSpec)
-	return cfg
+// FixCmdArgs 替换命令行参数中的占位符，例如 <pid> 替换为当前进程的 PID
+var FixCmdArgs = func(args []string) []string {
+	for i, arg := range args {
+		switch arg {
+		case "<pid>":
+			args[i] = fmt.Sprintf("%d", os.Getpid())
+		}
+	}
+	return args
 }
 
-type Hook func(map[string]any)
-
-type Event struct {
-	Packet *PacketEvent
-	Meta   *SocketMeta
-	Record map[string]any
-}
+var _ zoo.Server = (*Server)(nil)
 
 type Server struct {
-	cfg    runtimeConfig
+	comm   string
+	args   []string
 	hook   Hook
-	ctx    context.Context
-	cancel context.CancelFunc
-
-	mu      sync.Mutex
-	started bool
-	closed  bool
-
-	rawSock int
-	objs    bpfObjects
-	links   []link.Link
-	state   monitorState
+	proc   proc.Process
+	closer io.Closer
 }
 
-func NewServer(cfg Config, hook Hook) (zoo.Server, error) {
-	rc, err := normalizeConfig(cfg)
+func (hdl *Server) Name() string {
+	return "(ZABEE)"
+}
+
+func (hdl *Server) Addr() string {
+	return hdl.comm + " ...(args)"
+}
+
+func (hdl *Server) RunServe() {
+	if hdl.proc == nil {
+		comm := hdl.comm
+		switch hdl.comm {
+		case "./zwbee":
+			// 判断当前文件夹中是否哟 zwbee 命令，如果没有，使用 embeddedCaptureBin 中的内容创建
+			if _, err := os.Stat("./zwbee"); os.IsNotExist(err) {
+				if err := os.WriteFile("./zwbee", embedCaptureBin, 0755); err != nil {
+					zoc.Exit("[_zaabee_]: write binary to ./zwbee error,", err.Error())
+				}
+				zoc.Logn("[_zaabee_]: zwbee binary write to ./zwbee")
+				// defer os.Remove("./zwbee") // 释放命令，不删除, 这个与 ./memfd 不同
+			}
+		case "./memfd":
+			// 使用 内存 利用Linux的 memfd_create 系统调用创建内核级匿名内存文件，完全不需要磁盘IO。
+			fd, err := MemfdCreate("zwbee", MFD_CLOEXEC)
+			if err != nil {
+				zoc.Exit("[_zaabee_]: create binary by memfd_create error,", err.Error())
+			}
+			// 将嵌入式二进制写入内存文件
+			if _, err := MemfdWrite(fd, embedCaptureBin); err != nil {
+				_ = MemfdClose(fd)
+				zoc.Exit("[_zaabee_]: write binary to memfd error,", err.Error())
+			}
+			// 获取内存文件的文件描述符路径
+			comm = fmt.Sprintf("/proc/%d/fd/%d", os.Getpid(), fd)
+			// 更新命令为内存文件路径
+			zoc.Logn("[_zaabee_]: zwbee binary loaded into memory via memfd")
+			// 运行完成后关闭内存文件
+			// defer unix.Close(fd)
+			defer func() {
+				MemfdClose(fd)
+				zoc.Logn("[_zaabee_]: zwbee binary in memfd closed")
+			}()
+		}
+		hdl.proc = proc.NewProcess(comm, FixCmdArgs(hdl.args)...)
+	}
+	// 创建管道，作为进程的 stdout 和 stderr，扫描器从管道的读端读取数据，直到进程退出或管道关闭
+	pr, pw, err := os.Pipe()
 	if err != nil {
-		return nil, fmt.Errorf("invalid config: %w", err)
+		zoc.Exit(fmt.Sprintf("[_zaabee_]: create pipe error: %s\n", err))
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	return &Server{
-		cfg:     rc,
-		hook:    hook,
-		ctx:     ctx,
-		cancel:  cancel,
-		rawSock: -1,
-		state: monitorState{
-			flows:   make(map[flowKey]*flowState),
-			sockets: socketCache{items: make(map[socketKey]SocketMeta)},
-		},
-	}, nil
+	// defer pr.Close(); defer pw.Close()
+	wait, err := hdl.proc.Execute(pw, hdl)
+	if err != nil {
+		zoc.Exit(fmt.Sprintf("[_zaabee_]: process start error: %s\n", err))
+	}
+	pid := hdl.proc.Pid()
+	zoc.Logn("[_zaabee_]: ---------------- process started, pid=", pid)
+	hdl.closer = pr // 将管道的读端作为 closer， 在 Shutdown 中关闭它，通知扫描器进程退出
+	go func() {
+		wait() // 等待进程退出, 更新进程状态
+		if hdl.closer != nil {
+			_ = hdl.closer.Close()
+			hdl.closer = nil
+		}
+	}()
+	hdl.scanToHook(pr) // 扫描进程输出，直到进程退出或管道关闭
+	zoc.Logn("[_zaabee_]: ---------------- process exited, pid=", pid)
 }
 
-func (s *Server) Name() string {
-	return "(EBPFG)"
-}
-
-func (s *Server) Addr() string {
-	if s.cfg.IfName != "" {
-		return s.cfg.IfName
-	}
-	return "all interfaces"
-}
-
-func (s *Server) RunServe() {
-	s.mu.Lock()
-	if s.started {
-		s.mu.Unlock()
-		return
-	}
-	s.started = true
-	s.mu.Unlock()
-
-	if err := s.run(); err != nil && !errors.Is(err, context.Canceled) {
-		zoc.Exit(fmt.Sprintf("[_zoobee_]: server exit error: %v\n", err))
-	}
-}
-
-func (s *Server) Shutdown(ctx context.Context) error {
-	s.mu.Lock()
-	if s.closed {
-		s.mu.Unlock()
-		return nil
-	}
-	s.closed = true
-	s.cancel()
-	if s.rawSock >= 0 {
-		_ = syscall.Close(s.rawSock)
-		s.rawSock = -1
-	}
-	links, objs := s.links, s.objs
-	s.links = nil
-	s.mu.Unlock()
-	closeLinks(links)
-	_ = objs.Close()
-
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	default:
-		return nil
+func (hdl *Server) scanToHook(pr io.ReadCloser) {
+	ePreKey := []byte("EBPF_CAPTURE: ")
+	scaner := bufio.NewScanner(pr)
+	for scaner.Scan() {
+		line := scaner.Bytes()
+		if len(line) == 0 || bytes.Equal(line, []byte{'\n'}) {
+			continue // 忽略空行和换行符
+		}
+		if hdl.hook != nil && bytes.HasPrefix(line, ePreKey) {
+			record := make(map[string]any)
+			if err := json.Unmarshal(line[len(ePreKey):], &record); err == nil {
+				hdl.hook(record)
+				continue
+			}
+			zoc.Logn("[_zaabee_]: invalid record by json, ", string(line))
+		} else {
+			zoc.Logn("[_zaabee_]:", string(line))
+		}
 	}
 }
 
-func closeLinks(links []link.Link) {
-	for _, l := range links {
-		_ = l.Close()
+func (hdl *Server) Shutdown(ctx context.Context) error {
+	if hdl.closer != nil {
+		_ = hdl.closer.Close()
+		hdl.closer = nil
 	}
+	_ = hdl.proc.Stop(0) // 发送 SIGTERM 信号，等待进程退出, 忽略错误
+	return nil
+}
+
+func (hdl *Server) Write(p []byte) (n int, err error) {
+	if len(p) == 0 {
+		return 0, nil
+	}
+	zoc.Logn("[_zaabee_]: ", string(p))
+	return len(p), nil
 }
