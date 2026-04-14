@@ -59,7 +59,7 @@ git:
 		echo "error: 'tag' not specified! Please specify the 'tag' using 'make git tag=(version)";\
 		exit 1; \
 	fi
-	make syncc && rm -rf zabee && make tidy && git add zobee/zwbee -f && git commit -m "add zwbee" && \
+	make syncc && rm -rf zabee && make tidy && git add zobee/zwbee -f && git commit -am "add zwbee and delete zabee" && \
 	git tag -a $(tag) -m "${tag}" && git push origin $(tag) && git reset --hard HEAD~1
 
 git-try:
