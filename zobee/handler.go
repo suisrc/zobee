@@ -9,12 +9,14 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	_ "embed"
 	_ "unsafe"
 
 	"github.com/suisrc/zoo"
 	"github.com/suisrc/zoo/zoc"
+	"github.com/suisrc/zoo/zoe/log"
 	"github.com/suisrc/zoo/zoe/proc"
 )
 
@@ -31,8 +33,11 @@ var (
 
 type Config struct {
 	Disabled bool     `json:"disabled"`
-	Command  string   `json:"command"`
-	CmdArgs  []string `json:"cmdargs"`
+	Command  string   `json:"command"` // 命令，默认为 ./zwbee，支持替换为 ./memfd 来使用内存文件
+	CmdArgs  []string `json:"cmdargs"` // 命令行参数，优先级低于 Command 中的参数
+	Logger   string   `json:"logger"`  // 日志发送地址
+	LogTty   bool     `json:"logtty"`  // 日志是否输出到终端
+	LogFmt   bool     `json:"logfmt"`  // 针对默认的json格式， 是否格式化， 默认不格式化输出一行
 }
 
 func Load(hook Hook) {
@@ -52,6 +57,10 @@ func Register(svc zoo.SvcKit, conf *Config, hook Hook) zoo.Closed {
 		zoc.Logn("[_zoobee_]: disabled")
 		return nil
 	}
+	if hook == nil && conf.Logger != "" {
+		// 使用 logger 配置构建默认的 hook
+		hook = NewDefaultHook("[_traffic]:", conf, nil)
+	}
 	// 优先使用 command 中的参数， 如果参数不存在，在使用 args 中的参数
 	comm, args := proc.ParseCmd(conf.Command)
 	if len(args) == 0 {
@@ -60,6 +69,55 @@ func Register(svc zoo.SvcKit, conf *Config, hook Hook) zoo.Closed {
 	hdl := &Server{comm: comm, args: args, hook: hook}
 	svc.Engine().Servers.Add(hdl)
 	return nil
+}
+
+// NewDefaultHook 根据 Logger 配置创建一个默认的 Hook，支持多种日志输出方式
+func NewDefaultHook(pkey string, conf *Config, conv func(map[string]any) ([]byte, error)) Hook {
+	if conf.Logger == "" {
+		return nil
+	}
+	if conv == nil {
+		if conf.LogFmt {
+			conv = func(record map[string]any) ([]byte, error) { return json.MarshalIndent(record, "", "  ") }
+		} else {
+			conv = func(record map[string]any) ([]byte, error) { return json.Marshal(record) }
+		}
+	}
+	address := conf.Logger
+	if strings.HasPrefix(address, "stdout://") {
+		return func(record map[string]any) {
+			if bts, err := conv(record); err == nil {
+				zoc.Logn(pkey, string(bts))
+			} else {
+				zoc.Logn("[_zoobee_]: convert record to bytes error, ", err.Error())
+			}
+		}
+	}
+	if strings.HasPrefix(address, "file://") {
+		writer := log.NewFileWriter(address[7:], 0, conf.LogTty)
+		return func(record map[string]any) {
+			if bts, err := conv(record); err == nil {
+				writer.Write(append(bts, '\n')) // 文件中每条记录占一行
+			} else {
+				zoc.Logn("[_zoobee_]: convert record to bytes error, ", err.Error())
+			}
+		}
+	}
+	// 其他情况，默认使用 syslog 输出
+	network := ""
+	if strings.HasPrefix(address, "udp://") {
+		network, address = "udp", address[6:]
+	} else if strings.HasPrefix(address, "tcp://") {
+		network, address = "tcp", address[6:]
+	}
+	writer := log.NewSyslogWriter(address, network, 0, conf.LogTty)
+	return func(record map[string]any) {
+		if bts, err := conv(record); err == nil {
+			writer.Write(bts)
+		} else {
+			zoc.Logn("[_zoobee_]: convert record to bytes error, ", err.Error())
+		}
+	}
 }
 
 // FixCmdArgs 替换命令行参数中的占位符，例如 <pid> 替换为当前进程的 PID
