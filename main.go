@@ -24,7 +24,7 @@ var ver_ []byte
 // var www_ embed.FS
 
 func main() {
-	app.Load(func(m map[string]any) { zoc.Logn(zoc.ToStrJSON(m)) }, nil)
+	app.Load(func(m map[string]any) { zoc.Logn(zoc.ToStrJSON(m)) })
 	zoo.HttpServeDef = false // 标记是否启动默认 HTTP 服务, 一些特殊的服务，可以代码方式关闭
 	zoo.Execute("KIT", zoc.BtsStr(app_), zoc.BtsStr(ver_), "(https://github.com/suisrc/zobee.git)")
 }

@@ -35,29 +35,31 @@ type Config struct {
 	CmdArgs  []string `json:"cmdargs"`
 }
 
-func Load(hook Hook, conf *Config) {
+func Load(hook Hook) {
 
 	flag.BoolVar(&G.Config.Disabled, "e3disabled", true, "是否禁用zobee")
 	flag.StringVar(&G.Config.Command, "e3command", "./zwbee", "命令")
 	flag.Var(zoc.NewStrArr(&G.Config.CmdArgs, []string{"-cpid", "<pid>"}), "e3cmdargs", "参数")
 
-	zoo.Register("14-zobee", &G, func(svc zoo.SvcKit) zoo.Closed {
-		if conf == nil {
-			conf = &G.Config
-		}
-		if conf.Disabled {
-			zoc.Logn("[_zoobee_]: disabled")
-			return nil
-		}
-		// 优先使用 command 中的参数， 如果参数不存在，在使用 args 中的参数
-		comm, args := proc.ParseCmd(conf.Command)
-		if len(args) == 0 {
-			args = conf.CmdArgs
-		}
-		hdl := &Server{comm: comm, args: args, hook: hook}
-		svc.Engine().Servers.Add(hdl)
+	zoo.Register("14-zobee", &G, func(svc zoo.SvcKit) zoo.Closed { return Register(svc, &G.Config, hook) })
+}
+
+func Register(svc zoo.SvcKit, conf *Config, hook Hook) zoo.Closed {
+	if conf == nil {
+		conf = &G.Config
+	}
+	if conf.Disabled {
+		zoc.Logn("[_zoobee_]: disabled")
 		return nil
-	})
+	}
+	// 优先使用 command 中的参数， 如果参数不存在，在使用 args 中的参数
+	comm, args := proc.ParseCmd(conf.Command)
+	if len(args) == 0 {
+		args = conf.CmdArgs
+	}
+	hdl := &Server{comm: comm, args: args, hook: hook}
+	svc.Engine().Servers.Add(hdl)
+	return nil
 }
 
 // FixCmdArgs 替换命令行参数中的占位符，例如 <pid> 替换为当前进程的 PID

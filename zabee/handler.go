@@ -55,31 +55,33 @@ func Load(hook Hook, conf *Config) {
 	flag.UintVar(&G.Config.Dport, "e3dport", 0, "目标端口过滤值")
 	flag.Int64Var(&G.Config.MaxBodySize, "e3maxbodysize", -1, "HTTP body 保留上限，默认 -1")
 
-	zoo.Register("14-zobee", &G, func(svc zoo.SvcKit) zoo.Closed {
-		if conf == nil {
-			conf = &G.Config
-		}
-		if conf.Disabled {
-			zoc.Logn("[_zoobee_]: disabled")
-			return nil
-		}
-		cfg := normalizeInitConfig(conf)
-		if _, err := normalizeConfig(cfg); err != nil {
-			svc.Engine().ServeStop("register zobee error by config,", err.Error())
-			return nil
-		}
-		// 特别重要的地方， 增加钩子函数参数， 以便在主程序中处理事件
-		srv, err := NewServer(cfg, hook)
-		if err != nil {
-			svc.Engine().ServeStop("register zobee error by server,", err.Error())
-			return nil
-		}
-		svc.Engine().Servers.Add(srv)
-		zoc.Logn("[_zoobee_]: registered", fmt.Sprintf("f=%s dir=%s", //
-			zoc.If(cfg.IfName != "", cfg.IfName, "all"), //
-			zoc.If(cfg.Direction != "", cfg.Direction, "both")))
+	zoo.Register("14-zobee", &G, func(svc zoo.SvcKit) zoo.Closed { return Register(svc, &G.Config, hook) })
+}
+
+func Register(svc zoo.SvcKit, conf *Config, hook Hook) zoo.Closed {
+	if conf == nil {
+		conf = &G.Config
+	}
+	if conf.Disabled {
+		zoc.Logn("[_zoobee_]: disabled")
 		return nil
-	})
+	}
+	cfg := normalizeInitConfig(conf)
+	if _, err := normalizeConfig(cfg); err != nil {
+		svc.Engine().ServeStop("register zobee error by config,", err.Error())
+		return nil
+	}
+	// 特别重要的地方， 增加钩子函数参数， 以便在主程序中处理事件
+	srv, err := NewServer(cfg, hook)
+	if err != nil {
+		svc.Engine().ServeStop("register zobee error by server,", err.Error())
+		return nil
+	}
+	svc.Engine().Servers.Add(srv)
+	zoc.Logn("[_zoobee_]: registered", fmt.Sprintf("f=%s dir=%s", //
+		zoc.If(cfg.IfName != "", cfg.IfName, "all"), //
+		zoc.If(cfg.Direction != "", cfg.Direction, "both")))
+	return nil
 }
 
 func normalizeInitConfig(cfg *Config) *Config {
