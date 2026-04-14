@@ -23,12 +23,12 @@ RUN go mod download
 FROM build_deps AS build
 
 COPY . .
-RUN cd zobee/ebpf && make ebpf_capture.o
+RUN cd ebpf && make
 RUN CGO_ENABLED=0 go build -o app -ldflags '-w -extldflags "-static"' .
 
 FROM alpine:3.23
 
-RUN apk add --no-cache ca-certificates tzdata
+RUN apk add --no-cache ca-certificates tzdata tcpdump
 
 WORKDIR /opt
 COPY --from=build /opt/app /opt/app
