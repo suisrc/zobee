@@ -54,5 +54,13 @@ git:
 	make syncc && git add zobee/ebpf_capture.o zabee/zwbee -f && git commit -m "add ebpf_capture.o and zwbee" && \
 	git tag -a $(tag) -m "${tag}" && git push origin $(tag) && git reset --hard HEAD~1
 
+git2:
+	@if [ -z "$(tag)" ]; then \
+		echo "error: 'tag' not specified! Please specify the 'tag' using 'make git tag=(version)";\
+		exit 1; \
+	fi
+	make syncc && rm -f zobee && make tidy && git add zabee/zwbee -f && git commit -m "add zwbee" && \
+	git tag -a $(tag) -m "${tag}" && git push origin $(tag) && git reset --hard HEAD~1
+
 git-try:
 	git push origin $(shell git describe --tags --abbrev=0) && git reset --hard HEAD~1
