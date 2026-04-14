@@ -14,6 +14,7 @@ RUN apk add --no-cache git \
   openssl-dev \
   zlib-dev \
   zlib-static \
+  zstd-dev \
   zstd-static \
   git \
   make \
