@@ -45,7 +45,7 @@ endif
 BPF_CFLAGS = -O2 -target bpf -g -D__TARGET_ARCH_$(TARGET_ARCH) -I$(ARCH_INCLUDE) $(TRIPLET_INCLUDE)
 
 ifeq ($(OS_ID), alpine)
-	BIN_CFLAGS = -lbpf -lelf -lzstd -lz
+	BIN_CFLAGS = -lbpf -lelf -lz
 else
 	BIN_CFLAGS = -lbpf -lelf -lz
 endif
