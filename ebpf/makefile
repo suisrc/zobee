@@ -35,6 +35,14 @@ else
 	TRIPLET_INCLUDE := /usr/include/$(ARCH)-linux-gnu
 endif
 
+# 如果上面计算的路径不存在，则回退到 /usr/include，保证编译能找到头文件
+ifeq ($(wildcard $(ARCH_INCLUDE)),)
+	ARCH_INCLUDE := /usr/include
+endif
+ifeq ($(wildcard $(TRIPLET_INCLUDE)),)
+	TRIPLET_INCLUDE := /usr/include
+endif
+
 # BPF编译通用参数
 BPF_CFLAGS = -O2 -target bpf -g -D__TARGET_ARCH_$(TARGET_ARCH) -I$(ARCH_INCLUDE) -I$(TRIPLET_INCLUDE)
 
