@@ -53,7 +53,7 @@ endif
 all: ebpf_capture.o ebpf_capture_blob.o zwbee
 
 ebpf_capture.o: ebpf_capture.c
-	$(CLANG) $(BPF_CFLAGS) -c ebpf_capture.c -o ebpf_capture.o && cp -f ebpf_capture.o ../zabee/ebpf_capture.o
+	$(CLANG) $(BPF_CFLAGS) -c ebpf_capture.c -o ebpf_capture.o
 
 ebpf_capture_blob.o: ebpf_capture.o
 	$(LD) -r -z noexecstack -b binary ebpf_capture.o -o ebpf_capture_blob.o
@@ -67,7 +67,7 @@ clean:
 	rm -f ebpf_capture.o ebpf_capture_blob.o zwbee
 
 syncc:
-	cp -f ebpf_capture.o ../zobee/ebpf_capture.o && cp -f zwbee ../zabee/zwbee
+	cp -f ebpf_capture.o ../zabee/ebpf_capture.o && cp -f zwbee ../zobee/zwbee
 	
 # 依赖安装提示
 depends:
